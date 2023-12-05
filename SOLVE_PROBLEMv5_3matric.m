@@ -43,7 +43,8 @@ E_uav_OE_max = 50000;
 E_uav_prop_max = 50000;
 
 % % !!! the random seed
-% rng(1);
+rng_seed = 500;
+rng(rng_seed);
 Task_Bit_Vec = ones(1,Num_User)*1e7;
 Loc_User_x = rand(1,10)*MAX_X
 Loc_User_y = rand(1,10)*MAX_Y
@@ -118,7 +119,7 @@ for m=1:Num_UAV
 end
 
 %% Main Solve Programm...
-MAX_Iteration = 10;
+MAX_Iteration = 100;
 Record_allRes = ones(3, MAX_Iteration) * (-1);
 % record the output of Sub-Problem-1
 Record_Res_iteration = ones(1,MAX_Iteration) * (-1);
@@ -140,7 +141,19 @@ Record_min_real_TAU_umn = ones(N, Num_User * Num_UAV)* -1;
 Record_min_real_L_un = ones(N, Num_User) * -1;
 Record_min_real_P_un = ones(N, Num_User) * -1;
 
-    
+% Record Trajectory vs. Iteration
+% Figure (Given_q_mn_x Given_q_mn_y)
+figure(1);
+hold on;
+for m=1:Num_UAV
+    scatter(Given_Q_mn_x(:,m), Given_Q_mn_y(:,m),'.');
+    scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'*');
+end
+for u=1:Num_User
+    scatter(Loc_User_x(:,u), Loc_User_y(:,u),'^');
+end
+
+
 for iteration = 1:MAX_Iteration
     
 
@@ -326,6 +339,8 @@ for iteration = 1:MAX_Iteration
                 fprintf('inner loop Traj Break! no decrement\n');
                 break
             end
+            
+            % Record Trajectory vs. Iteration
             % Figure (Given_q_mn_x Given_q_mn_y)
             figure(1);
             hold on;
@@ -338,6 +353,7 @@ for iteration = 1:MAX_Iteration
             end
             Given_Q_mn_x = Var_Q_mn_x;
             Given_Q_mn_y = Var_Q_mn_y;
+
             Record_allRes(2, iteration) = cvx_optval;
         else
             % infeasible
@@ -416,8 +432,8 @@ for iteration = 1:MAX_Iteration
 
             %[4] task finished constraint
             % convex Rate
-        %     st_Rate_concave = (Rate_hat * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
-            st_Rate_concave = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
+            st_Rate_concave = (Rate_hat * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
+        %    st_Rate_concave = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
         %     st_Rate_concave = (Rate_hat_Taylor_term1 * Matrix_Replicate_4_40) - Rate_tilde_Taylor_term1;
             % unit is Mb
             offload_bits = (st_Rate_concave .* Given_TAU_umn) * delta * (Matrix_Replicate_10_40') * (Bandwidth/1e6);
@@ -427,8 +443,8 @@ for iteration = 1:MAX_Iteration
 %             maximize( min(Computed_bits) )
             
         %     % Target
-        % %     target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
-            target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
+            target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
+        %    target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
         %     % unit is Mbps
             target_offload_bits = (target_comp_Rate .* Given_TAU_umn) * delta * Matrix_Replicate_10_40' * Bandwidth/1e6;
             targe_time_bits = (target_offload_bits./repmat(Task_Bit_Vec/1e6, [N, 1])) + Given_L_un;
@@ -633,8 +649,14 @@ end
 %Figure
 figure(4);
 hold on;
-plot(1:MAX_Iteration, Record_Res_iteration,'Marker','+','Color','b');
+%plot(1:MAX_Iteration, Record_Res_iteration,'Marker','+','Color','b');
 plot(1:MAX_Iteration, Record_Res_real_iteration,'Marker','o','Color','k');
+xlabel('Iteration');
+ylabel('Max-min AoT')
 legend('cvxoptval','real value (after L)')
 
+
 Record_allRes
+
+filename = sprintf('alldatarngseed_rngseed%d.mat', rng_seed);
+save(filename)
