@@ -1,128 +1,7 @@
-% traj(delay)-P(delay)-tauL(delay), not decrease then break
-% 1. Optimize Trajectory (minimize Weighted Delay), 
-%    SCA multiple r, inner loop, not decrease or infeasible
-% 2. Optimize P (minimize Weighted Delay), SCA multiple r, inner loop
-%    SCA multiple r, inner loop, not decrease or infeasible
-% 3. Optimize th\TAU and L (minimize Weighted Delay);
-
-
-clear;
-clc;
-
-tic;
-
-%% Params
-T = 100;
-delta = 0.5;
-N = 200;
-% altidue 100m
-H = 100;
-% max velocity, 30m/s
-v_max = 30;
-% min distance between two UAVs, 50m
-d_min = 100;
-Num_UAV = 4;
-Num_User = 10;
-MAX_X = 1000;
-MAX_Y = 1000;
-%computation parameter
-c_u = 1e3;
-% local 10s, 20 time-slots
-CPUFreq_User = 1e9;
-% CPUFreq_User = 5e8;
-CPUFreq_UAV = 10e9;
-kappa_user = 1e-27;
-kappa_uav = 1e-27;
-%communication parameter (1M Hz, 0.1W)
-rho = 1e-6;
-Sigma2 = 1e-14;
-Pu_max = 0.1;
-Bandwidth = 1e6;
-
-%constraint
-E_user_max = 200;
-E_uav_OE_max = 500;
-E_uav_prop_max = 5000;
-
-% % !!! the random seed
-rng_seed = 1000;
-rng(rng_seed);
-Lk = 1e7;
-Task_Bit_Vec = ones(1,Num_User)*Lk;
-Loc_User_x = rand(1,Num_User)*MAX_X
-Loc_User_y = rand(1,Num_User)*MAX_Y
-
-%% hovering Params
-% Utip 120m/s
-prop_param_Utip = 120;
-
-% profile drag coefficient
-prop_param_delta = 0.012;
-% rho, air density = 1.225 kg/m^3
-prop_param_rho = 1.225;
-% s, rotor solidity, 0.05
-prop_param_s = 0.05;
-% A, rotor disc area
-prop_param_A = 0.503;
-% blade angular velocity in radians/second
-prop_param_Omega = 300;
-% Rator radius in m
-prop_param_R = 0.4;
-prop_param_P0 = (prop_param_delta / 8) * prop_param_rho * prop_param_s * prop_param_A * power(prop_param_Omega, 3) * power(prop_param_R, 3);
-
-% incremental correction factor to induced power
-prop_param_k = 0.1;
-% W, aircraft weight in Newton
-prop_param_W = 20;
-prop_param_Pi = (1 + prop_param_k) * power(prop_param_W, 3 / 2) / sqrt(2 * prop_param_rho * prop_param_A);
-
-% d0, fuselage drag ratio
-prop_param_d0 = 0.6;
-% mean rotor induced velocity
-prop_param_v0 = 4.03;
-
-%% Useful Matrix
-Matrix_Replicate_10_40 = zeros(Num_User, Num_User * Num_UAV);
-for u=1:Num_User
-    for m=1:Num_UAV
-        Matrix_Replicate_10_40(u, u+(m-1)*Num_User) = 1;
-    end
-end
-Matrix_Replicate_4_40 = zeros(Num_UAV, Num_User * Num_UAV);
-for m=1:Num_UAV
-    Matrix_Replicate_4_40(m, (m-1)*Num_User+1:m*Num_User) = 1;
-end
-Matrix_delete_user = zeros(Num_User * Num_UAV, Num_User * Num_UAV);
-for m=1:Num_UAV
-    Matrix_delete_user((m-1)*Num_User+1:m*Num_User, (m-1)*Num_User+1:m*Num_User) = 1;
-end
-Matrix_delete_user = Matrix_delete_user - eye(Num_User * Num_UAV);
-
-%% Given Value
-Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
-Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*delta /(Task_Bit_Vec(1)*c_u));
-
-Given_P_un = ones(N, Num_User).* Pu_max;
-Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
-
-Given_Q_mn_x = zeros(N,Num_UAV);
-Given_Q_mn_y = zeros(N,Num_UAV);
-Given_Qinit_mn_x = zeros(1,Num_UAV);
-Given_Qinit_mn_y = zeros(1,Num_UAV);
-init_center_loc = [MAX_X*0.25, MAX_Y*0.75; MAX_X*0.25, MAX_Y*0.25; MAX_X*0.75, MAX_Y*0.75; MAX_X*0.75, MAX_Y*0.25];
-init_r = MAX_X * 0.25;
-for m=1:Num_UAV
-    Given_Qinit_mn_x(1, m) = init_center_loc(m,1) + cos(0)*init_r;
-    Given_Qinit_mn_y(1, m) = init_center_loc(m,2) + sin(0)*init_r;
-    for i=1:N
-        tmp_theta = 2 * pi * (i/(N+1));
-        Given_Q_mn_x(i, m) = init_center_loc(m,1) + cos(tmp_theta)*init_r;
-        Given_Q_mn_y(i, m) = init_center_loc(m,2) + sin(tmp_theta)*init_r;
-    end
-end
+%% Peak Power Alg.
 
 %% Main Solve Programm...
-MAX_Iteration = 50;
+%     MAX_Iteration = 100;
 Record_allRes = ones(3, MAX_Iteration) * (-1);
 % record the output of Sub-Problem-1
 Record_Res_iteration = ones(1,MAX_Iteration) * (-1);
@@ -144,30 +23,7 @@ Record_min_real_TAU_umn = ones(N, Num_User * Num_UAV)* -1;
 Record_min_real_L_un = ones(N, Num_User) * -1;
 Record_min_real_P_un = ones(N, Num_User) * -1;
 
-% Record Trajectory vs. Iteration
-% Figure (Given_q_mn_x Given_q_mn_y)
-figure(1);
-hold on;
-c = ['b';'k';'m';'r'];
-for m=1:Num_UAV
-    scatter(Given_Q_mn_x(:,m), Given_Q_mn_y(:,m),'.');
-    % scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'*');
-    scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'pentagram','LineWidth',3,'MarkerEdgeColor',c(m,:));
-end
-for u=1:Num_User
-    % scatter(Loc_User_x(:,u), Loc_User_y(:,u),'^');
-    scatter(Loc_User_x(:,u), Loc_User_y(:,u), '^','LineWidth',2);
-end
-xlabel('x(m)');
-ylabel('y(m)');
-box on;
-set(gca, 'Fontname', 'Times New Roman','FontSize',12);
-
-
-cvx_solver Mosek_4 
-
 for iteration = 1:MAX_Iteration
-    
 
     %% [2] SCA and Optimize Trajectory  ...
     Max_iteration_traj = 50;
@@ -188,13 +44,7 @@ for iteration = 1:MAX_Iteration
        %% [2.2] CVX Trajectory (without bits constraint)
         disp('CVX Trajectory');
         cvx_begin quiet
-        %     cvx_solver SDPT3
-            %cvx_solver SeDuMi
-    %         cvx_solver_settings('write', 'dump.task.gz');
-        %     cvx_solver_settings('MSK_IPAR_INFEAS_REPORT_AUTO', 'MSK_ON');
             cvx_precision low
-        %     cvx_solver_settings('MSK_DPAR_INTPNT_CO_TOL_REL_GAP', 1e-2);
-
             variable Var_Q_mn_x(N, Num_UAV) nonnegative
             variable Var_Q_mn_y(N, Num_UAV) nonnegative
             variable Var_Y_Slack(N+1, Num_UAV) nonnegative
@@ -350,162 +200,45 @@ for iteration = 1:MAX_Iteration
                 fprintf('inner loop Traj Break! no decrement\n');
                 break
             end
+
+            ck_Rate = GetAccurateRate(Var_Q_mn_x, Var_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
+            tmpCVXTraj_Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
+            [Final_Check, ck_prop_energy] = CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn, tmpCVXTraj_Given_L_un, Given_P_un,Var_Q_mn_x, Var_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+            % tmp_Res_Check_energy_prop_uav = (ck_prop_energy <= E_uav_prop_max);
+            % fprintf('ck_prop_energy (<%d): ', E_uav_prop_max);
+            % for tmp_i=1:Num_UAV
+            %     fprintf(' %d ', ck_prop_energy(tmp_i));
+            % end
+            % fprintf('\n');
+            % if sum(tmp_Res_Check_energy_prop_uav(:)) == length(tmp_Res_Check_energy_prop_uav)
+            if Final_Check == 0
+                fprintf('Pass! CVX Traj Check \n');
+                % record the result
+                Given_Q_mn_x = Var_Q_mn_x;
+                Given_Q_mn_y = Var_Q_mn_y;
+                Record_allRes(2, iteration) = cvx_optval;
+            else
+                fprintf('Break! NoPass CVX Traj Check (%d) , E_uav_prop_max:%d\n', Final_Check, E_uav_prop_max);
+                break;
+            end
+
             
-            % Record Trajectory vs. Iteration
-            % Figure (Given_q_mn_x Given_q_mn_y)
-            figure(2);
-            hold on;
-            c = ['b';'k';'m';'r'];
-            for m=1:Num_UAV
-                scatter(Var_Q_mn_x(:,m), Var_Q_mn_y(:,m),'.');
-                % scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'*');
-                scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'pentagram','LineWidth',3,'MarkerEdgeColor',c(m,:));
-            end
-            for u=1:Num_User
-                % scatter(Loc_User_x(:,u), Loc_User_y(:,u),'^');
-                scatter(Loc_User_x(:,u), Loc_User_y(:,u), '^','LineWidth',2);
-            end
-            xlabel('x(m)');
-            ylabel('y(m)');
-            box on;
-            set(gca, 'Fontname', 'Times New Roman','FontSize',12);
-
-
-
-            Given_Q_mn_x = Var_Q_mn_x;
-            Given_Q_mn_y = Var_Q_mn_y;
-
-            Record_allRes(2, iteration) = cvx_optval;
         else
             % infeasible
             fprintf('inner loop Traj Break! infeasible\n');
-            ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-            [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
-            CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
-            fprintf('ck_Rate_2taylor_true Analyzing... ...\n');
-            ck_Rate_2taylor_true = Get2TaylorRate(Given_Q_mn_x, Given_Q_mn_y, Given_Q_mn_y, Given_Q_mn_x_r, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-            [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
-            CheckProc_func(Num_User, Num_UAV,ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+            % ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
+            % [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+            % CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+            % fprintf('ck_Rate_2taylor_true Analyzing... ...\n');
+            % ck_Rate_2taylor_true = Get2TaylorRate(Given_Q_mn_x, Given_Q_mn_y, Given_Q_mn_y, Given_Q_mn_x_r, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
+            % [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+            % CheckProc_func(Num_User, Num_UAV,ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
             break
         end
         
 
     end
 
-    
-    %% [3] SCA and Optimize P...
-    Max_iteration_P = 50;
-    Record_target_P = ones(1,Max_iteration_traj)*-inf;
-    for iteration_P=1:Max_iteration_P
-        %% [3.1] P_r SCA method for CVX TAU and L
-        Given_P_un_r = Given_P_un;
-
-        %% [3.2] CVX P and induce F
-        disp('CVX P and induce F');
-        cvx_begin quiet
-            %cvx_precision low
-            variable Var_P_un(N, Num_User) nonnegative
-            cvx_precision low
-        %     mosek_params = {'MSK_DPAR_INTPNT_CO_TOL_REL_GAP':  1e-2},
-            cvx_solver_settings('MSK_DPAR_INTPNT_CO_TOL_REL_GAP', 1e-2);
-
-            %[1] local computing energy
-            le = power(Task_Bit_Vec * c_u,3) * kappa_user / (delta * delta);
-            energy_user_loc_comp = power(Given_L_un, 3) * diag(le);
-            energy_user_comm = Given_TAU_umn * (Matrix_Replicate_10_40') .* Var_P_un * delta;
-            E_user = sum(energy_user_loc_comp + energy_user_comm,1);
-
-            %[2] offloading computing energy
-            % Rate hat
-            dist_uav_user_x = Given_Q_mn_x * Matrix_Replicate_4_40 - ones(N,1) * Loc_User_x * Matrix_Replicate_10_40;
-            dist_uav_user_y = Given_Q_mn_y * Matrix_Replicate_4_40 - ones(N,1) * Loc_User_y * Matrix_Replicate_10_40;
-            denomin = power(dist_uav_user_x, 2) + power(dist_uav_user_y, 2) + H*H;
-            Rate_hat_lg = ((Var_P_un * rho * Matrix_Replicate_10_40) /Sigma2 ./ denomin) * Matrix_Replicate_4_40' + 1;
-            Rate_hat = log(Rate_hat_lg)/log(2) + log2(Sigma2);
-        %     Rate_hat = -rel_entr(1,Rate_hat_lg)/log(2);
-            % Rate tilde
-            Rate_tilde_lg = ((Var_P_un * rho * Matrix_Replicate_10_40) /Sigma2 ./ denomin) * Matrix_delete_user + 1;
-            Rate_tilde = log(Rate_tilde_lg) / log(2) + log2(Sigma2);
-        %     Rate_tilde = -rel_entr(1,Rate_tilde_lg)/log(2);
-            % Rate hat Taylor
-            Rate_hat_Taylor_lg = ((Given_P_un_r * rho * Matrix_Replicate_10_40) / Sigma2 ./ denomin) * Matrix_Replicate_4_40' + 1;
-            Rate_hat_Taylor_term1 = log2(Rate_hat_Taylor_lg) + log2(Sigma2);
-            Rate_hat_Taylor_mul = (ones(N, Num_User) * Matrix_Replicate_10_40 * rho * log2(exp(1)) / Sigma2 ./ denomin) ./ (Rate_hat_Taylor_lg * Matrix_Replicate_4_40);
-            Rate_hat_Taylor_term2 = Rate_hat_Taylor_mul .* ((Var_P_un - Given_P_un_r ) * Matrix_Replicate_10_40);
-            Rate_hat_Taylor = Rate_hat_Taylor_term1 + (Rate_hat_Taylor_term2 * Matrix_Replicate_4_40');
-            % Rate tilde Taylor
-            Rate_tilde_Taylor_lg = ((Given_P_un_r * rho * Matrix_Replicate_10_40) /Sigma2 ./ denomin) * Matrix_delete_user + 1;
-            Rate_tilde_Taylor_term1 = log2(Rate_tilde_Taylor_lg) + log2(Sigma2);
-            Rate_tilde_Taylor_mul = (ones(N, Num_User) * Matrix_Replicate_10_40 * rho * log2(exp(1)) / Sigma2 ./ denomin) ./ Rate_tilde_Taylor_lg;
-            Rate_tilde_Taylor_term2 = Rate_tilde_Taylor_mul .* ((Var_P_un - Given_P_un_r ) * Matrix_Replicate_10_40);
-            Rate_tilde_Taylor = Rate_tilde_Taylor_term1 + (Rate_tilde_Taylor_term2 * Matrix_delete_user);
-            % convex Rate
-            st_comm_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
-            st_comp_energy_ele = (kappa_uav * power(Bandwidth,3) * delta  * power(c_u, 3) * Given_TAU_umn ) .* pow_pos(st_comm_Rate, 3);
-            E_uav_comp = sum(st_comp_energy_ele * Matrix_Replicate_4_40', 1);
-            % E_uav_comp <= E_uav_OE_max;
-
-            %[3] offloading constraint
-            st_Rate_convex = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
-            Freq_Needed = max(st_Rate_convex/1e6, 0) * c_u;
-        %     Freq_Needed <= CPUFreq_UAV
-
-            %[4] task finished constraint
-            % convex Rate
-            st_Rate_concave = (Rate_hat * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
-        %    st_Rate_concave = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
-        %     st_Rate_concave = (Rate_hat_Taylor_term1 * Matrix_Replicate_4_40) - Rate_tilde_Taylor_term1;
-            % unit is Mb
-            offload_bits = (st_Rate_concave .* Given_TAU_umn) * delta * (Matrix_Replicate_10_40') * (Bandwidth/1e6);
-            local_bits = Given_L_un * diag(Task_Bit_Vec)/1e6;
-            Computed_bits = sum(offload_bits + local_bits, 1);
-            % Computed_bits >= Task_Bit_Vec
-%             maximize( min(Computed_bits) )
-            
-        %     % Target
-            target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
-        %    target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
-        %     % unit is Mbps
-            target_offload_bits = (target_comp_Rate .* Given_TAU_umn) * delta * Matrix_Replicate_10_40' * Bandwidth/1e6;
-            targe_time_bits = (target_offload_bits./repmat(Task_Bit_Vec/1e6, [N, 1])) + Given_L_un;
-            Delay_Utility = sum(diag(1:1:N) * targe_time_bits, 1);
-            Target = max(Delay_Utility);
-            minimize( Target )
-
-            % sub-area constraint
-            subarea = max(pow_abs(Var_P_un - Given_P_un_r, 2));
-
-            subject to
-                Var_P_un <= Pu_max
-                subarea <= 0.01 * Pu_max
-                E_user <= E_user_max
-                E_uav_comp <= E_uav_OE_max
-                Freq_Needed <= CPUFreq_UAV/1e6
-                Computed_bits >= Task_Bit_Vec/1e6
-        cvx_end
-%         cvx_status
-%         cvx_optval
-       %% [3.3] Record after CVX P
-        fprintf('OptRes_P [%d]-[%d]:%s %f\n', iteration, iteration_P, cvx_status, cvx_optval);
-        if isequal(cvx_status, 'Solved')
-            Record_target_P(1, iteration_P) = cvx_optval;
-            fprintf('transmit power [%f]~[%f]\n', min(min(Var_P_un)), max(max(Var_P_un)));
-            % tmp_change_target_P = Record_target_P(1, iteration_P) - Record_target_P(1, iteration_P-1)
-            % if converge (less than not OK!)then break  (delay should not increase)
-            %if ((iteration_P >=2) && !( Record_target_P(1, iteration_P) <= Record_target_P(1, iteration_P-1)-0.001 ) )
-            if ((iteration_P >=2) && ( Record_target_P(1, iteration_P) > Record_target_P(1, iteration_P-1)-0.001 ) )
-                fprintf('inner loop P Break! no decrement\n');
-                break
-            end
-            Given_P_un = Var_P_un;
-            Record_allRes(3, iteration) = cvx_optval;
-        else
-            fprintf('inner loop P Break! infeasible\n');
-            break
-        end
-        
-    end
-    
     %% [1] Optimize TAU and L ...
     %% [1.1] accurate Rate for  CVX TAU and L
     % Rate Hat
@@ -606,9 +339,29 @@ for iteration = 1:MAX_Iteration
         end
         % Need to Arrange & Check the result 
         Record_allRes(1, iteration) = cvx_optval;
+    else
+        fprintf('ERROR! CVX Status!!! CVX TAU and L\n');
+        break;
     end
+
     
-    %% [1.4] Record Value after CVX TAU and L 
+    %% [1.4] Record Value after CVX TAU and L
+    fprintf('CVX BCD-[%d]\n', iteration);
+    % Complement Bits (modify Given_L_un)
+    % Accurate Rate
+    ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
+    Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
+    [Final_Check, ck_prop_energy] = CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+    % Get Value
+    [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+    
+    if Final_Check == 0
+        fprintf('Pass! Record Value after CVX TAU and L \n');
+    else
+        fprintf('Break! NoPass Record Value after CVX TAU and L (%d) \n', Final_Check);
+        break;
+    end
+
     Record_Res_iteration(1,iteration) = cvx_optval;
     % record the best one according to the Output of SubProblem1
     if cvx_optval < Record_min_cvxoptval
@@ -621,12 +374,6 @@ for iteration = 1:MAX_Iteration
         Record_min_P_un = Given_P_un;
     end
     
-    % Complement Bits (modify Given_L_un)
-    % Accurate Rate
-    ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-    Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
-    % Get Value
-    [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
     Record_Res_real_iteration(1,iteration) = result;
     if result < Record_min_result
         Record_min_real_iteration = iteration;
@@ -637,55 +384,19 @@ for iteration = 1:MAX_Iteration
         Record_min_real_L_un = Given_L_un;
         Record_min_real_P_un = Given_P_un;
     end
-    
-end
 
-% Figure (Given_q_mn_x Given_q_mn_y)
-% the final result
-figure(3);
-hold on;
-title('final');
-for m=1:Num_UAV
-    scatter(Given_Q_mn_x(:,m), Given_Q_mn_y(:,m),'.');
-    scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'*');
 end
-for u=1:Num_User
-    scatter(Loc_User_x(:,u), Loc_User_y(:,u),'^');
-end
-box on;
-set(gca, 'Fontname', 'Times New Roman','FontSize',12);
-
-% Figure (Given_q_mn_x Given_q_mn_y)
-% the best result
-figure(4);
-hold on;
-title('best');
-for m=1:Num_UAV
-    scatter(Record_min_Given_Q_mn_x(:,m), Record_min_Given_Q_mn_y(:,m),'.');
-    scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'*');
-end
-for u=1:Num_User
-    scatter(Loc_User_x(:,u), Loc_User_y(:,u),'^');
-end
-box on;
-set(gca, 'Fontname', 'Times New Roman','FontSize',12);
 
 %Figure
-figure(5);
+figure(1);
 hold on;
 %plot(1:MAX_Iteration, Record_Res_iteration,'Marker','+','Color','b');
 plot(1:MAX_Iteration, Record_Res_real_iteration,'Marker','o','Color','k');
 xlabel('Iteration');
-ylabel('Max-min AoT')
-legend('cvxoptval','real value (after L)')
-box on;
-set(gca, 'Fontname', 'Times New Roman','FontSize',12);
-
-save('111.mat');
-
+ylabel('Max-min AoT');
+% legend('cvxoptval','real value (after L)');
+legend('cvxoptval');
 Record_allRes
-CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
-            
-toc;
-% filename = sprintf('alldatarngseed_rngseed%d.mat', rng_seed);
-% save(filename)
+
+A_finalIteration_Res = Record_Res_real_iteration(end);
+A_breakiteration = iteration;

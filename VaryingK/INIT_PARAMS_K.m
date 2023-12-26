@@ -1,28 +1,18 @@
-% traj(delay)-P(delay)-tauL(delay), not decrease then break
-% 1. Optimize Trajectory (minimize Weighted Delay), 
-%    SCA multiple r, inner loop, not decrease or infeasible
-% 2. Optimize P (minimize Weighted Delay), SCA multiple r, inner loop
-%    SCA multiple r, inner loop, not decrease or infeasible
-% 3. Optimize th\TAU and L (minimize Weighted Delay);
-
-
-clear;
-clc;
-
 %% Params
 T = 100;
-delta = 0.5;
 N = 200;
+% delta = 0.5;
+delta = T/N;
 % altidue 100m
 H = 100;
 % max velocity, 30m/s
 v_max = 30;
 % min distance between two UAVs, 50m
 d_min = 100;
-Num_UAV = 4;
-Num_User = 10;
-MAX_X = 1000;
-MAX_Y = 1000;
+% Num_UAV = 4;
+% Num_User = 10;
+MAX_X = 1500;
+MAX_Y = 1500;
 %computation parameter
 c_u = 1e3;
 % local 10s, 20 time-slots
@@ -38,16 +28,17 @@ Pu_max = 0.1;
 Bandwidth = 1e6;
 
 %constraint
-E_user_max = 2000;
-E_uav_OE_max = 50000;
+E_user_max = 200;
+E_uav_OE_max = 2000;
 E_uav_prop_max = 50000;
 
 % % !!! the random seed
-% rng(1);
-Task_Bit_Vec = ones(1,Num_User)*1e7;
-Loc_User_x = rand(1,10)*MAX_X
-Loc_User_y = rand(1,10)*MAX_Y
-
+% rng_seed = 1000;
+% rng(rng_seed);
+% t = clock;
+% rng(t(6));
+% rand(1)
+   
 %% hovering Params
 % Utip 120m/s
 prop_param_Utip = 120;
@@ -94,38 +85,4 @@ for m=1:Num_UAV
 end
 Matrix_delete_user = Matrix_delete_user - eye(Num_User * Num_UAV);
 
-%% Given Value
-Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
-Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*delta /(Task_Bit_Vec(1)*c_u));
 
-Given_P_un = ones(N, Num_User).* Pu_max;
-Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
-
-Given_Q_mn_x = zeros(N,Num_UAV);
-Given_Q_mn_y = zeros(N,Num_UAV);
-Given_Qinit_mn_x = zeros(1,Num_UAV);
-Given_Qinit_mn_y = zeros(1,Num_UAV);
-init_center_loc = [MAX_X*0.25, MAX_Y*0.75; MAX_X*0.25, MAX_Y*0.25; MAX_X*0.75, MAX_Y*0.75; MAX_X*0.75, MAX_Y*0.25];
-init_r = MAX_X * 0.25;
-for m=1:Num_UAV
-    Given_Qinit_mn_x(1, m) = init_center_loc(m,1) + cos(0)*init_r;
-    Given_Qinit_mn_y(1, m) = init_center_loc(m,2) + sin(0)*init_r;
-    for i=1:N
-        tmp_theta = 2 * pi * (i/(N+1));
-        Given_Q_mn_x(i, m) = init_center_loc(m,1) + cos(tmp_theta)*init_r;
-        Given_Q_mn_y(i, m) = init_center_loc(m,2) + sin(tmp_theta)*init_r;
-    end
-end
-
-
-% Figure (Given_q_mn_x Given_q_mn_y)
-% the final result
-figure(2);
-hold on;
-for m=1:Num_UAV
-    scatter(Given_Q_mn_x(:,m), Given_Q_mn_y(:,m),'.');
-    scatter(Given_Qinit_mn_x(:,m), Given_Qinit_mn_y(:,m),'*');
-end
-for u=1:Num_User
-    scatter(Loc_User_x(:,u), Loc_User_y(:,u),'^');
-end

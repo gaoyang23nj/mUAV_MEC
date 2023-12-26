@@ -1,86 +1,11 @@
-function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec)
+function [Final_Check, ck_prop_energy] = CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec)
 %UNTITLED 此处显示有关此函数的摘要
 %   此处显示详细说明
     %% Params
-    T = 100;
-    delta = 0.5;
-    N = 200;
-    % altidue 100m
-    H = 100;
-    % max velocity, 30m/s
-    v_max = 30;
-    % min distance between two UAVs, 50m
-    d_min = 100;
-%     Num_UAV = 4;
-%     Num_User = 10;
-    MAX_X = 1000;
-    MAX_Y = 1000;
-    %computation parameter
-    c_u = 1e3;
-    % local 10s, 20 time-slots
-    CPUFreq_User = 1e9;
-    % CPUFreq_User = 5e8;
-    CPUFreq_UAV = 10e9;
-    kappa_user = 1e-27;
-    kappa_uav = 1e-27;
-    %communication parameter (1M Hz, 0.1W)
-    rho = 1e-6;
-    Sigma2 = 1e-14;
-    Pu_max = 0.1;
-    Bandwidth = 1e6;
+    INIT_PARAMS_K;
 
-    %constraint
-    E_user_max = 2000;
-    E_uav_OE_max = 50000;
-    E_uav_prop_max = 50000;
+    Final_Check = 0;
 
-    %% hovering Params
-    % Utip 120m/s
-    prop_param_Utip = 120;
-
-    % profile drag coefficient
-    prop_param_delta = 0.012;
-    % rho, air density = 1.225 kg/m^3
-    prop_param_rho = 1.225;
-    % s, rotor solidity, 0.05
-    prop_param_s = 0.05;
-    % A, rotor disc area
-    prop_param_A = 0.503;
-    % blade angular velocity in radians/second
-    prop_param_Omega = 300;
-    % Rator radius in m
-    prop_param_R = 0.4;
-    prop_param_P0 = (prop_param_delta / 8) * prop_param_rho * prop_param_s * prop_param_A * power(prop_param_Omega, 3) * power(prop_param_R, 3);
-
-    % incremental correction factor to induced power
-    prop_param_k = 0.1;
-    % W, aircraft weight in Newton
-    prop_param_W = 20;
-    prop_param_Pi = (1 + prop_param_k) * power(prop_param_W, 3 / 2) / sqrt(2 * prop_param_rho * prop_param_A);
-
-    % d0, fuselage drag ratio
-    prop_param_d0 = 0.6;
-    % mean rotor induced velocity
-    prop_param_v0 = 4.03;
-
-
-    %% Useful Matrix
-    Matrix_Replicate_10_40 = zeros(Num_User, Num_User * Num_UAV);
-    for u=1:Num_User
-        for m=1:Num_UAV
-            Matrix_Replicate_10_40(u, u+(m-1)*Num_User) = 1;
-        end
-    end
-    Matrix_Replicate_4_40 = zeros(Num_UAV, Num_User * Num_UAV);
-    for m=1:Num_UAV
-        Matrix_Replicate_4_40(m, (m-1)*Num_User+1:m*Num_User) = 1;
-    end
-%     Matrix_delete_user = zeros(Num_User * Num_UAV, Num_User * Num_UAV);
-%     for m=1:Num_UAV
-%         Matrix_delete_user((m-1)*Num_User+1:m*Num_User, (m-1)*Num_User+1:m*Num_User) = 1;
-%     end
-%     Matrix_delete_user = Matrix_delete_user - eye(Num_User * Num_UAV);
-    
     %% Main Check Proc
     disp("CheckProc...")
     % % max velocity, 30m/s
@@ -103,9 +28,12 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
     Res_Check_energy_user = (ck_energy_user <= E_user_max);
     [tmp_num_row, tmp_num_col] = size(Res_Check_energy_user);
     if sum(Res_Check_energy_user(:)) == tmp_num_row * tmp_num_col
-        fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
+        fprintf('<%d Pass....%d %d\n',E_user_max, tmp_num_row, tmp_num_col);
     else
-        fprintf('sum:%d, size:%d %d\n',sum(Res_Check_energy_user(:)), tmp_num_row, tmp_num_col);
+        fprintf(' %d', ck_energy_user);
+        fprintf('\n');
+        fprintf('<%d No Pass! sum:%d, size:%d %d\n',E_user_max, sum(Res_Check_energy_user(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     %% [2] Energy: Propulsion Energy in UAV
@@ -121,11 +49,14 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
     ck_prop_energy_term3 = sqrt(ck_prop_energy_term3_1 - ck_prop_energy_term3_2) * prop_param_Pi;
     ck_prop_energy = sum(ck_prop_energy_term1 + ck_prop_energy_term2 + ck_prop_energy_term3, 1) * delta;
     Res_Check_energy_prop_uav = (ck_prop_energy <= E_uav_prop_max);
+    fprintf(' %d', ck_prop_energy);
+    fprintf('\n');
     [tmp_num_row, tmp_num_col] = size(Res_Check_energy_prop_uav);
     if sum(Res_Check_energy_prop_uav(:)) == tmp_num_row * tmp_num_col
-        fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
+        fprintf('<%d Pass....%d %d\n', E_uav_prop_max, tmp_num_row, tmp_num_col);
     else
-        fprintf('sum:%d, size:%d %d\n',sum(Res_Check_energy_prop_uav(:)), tmp_num_row, tmp_num_col);
+        fprintf('<%d No Pass! sum:%d, size:%d %d\n', E_uav_prop_max, sum(Res_Check_energy_prop_uav(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     %% [3] Energy: Offloading Computation Energy in UAV
@@ -146,9 +77,12 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
     Res_Check_energy_comp_uav = (ck_E_uav_comp <= E_uav_OE_max);
     [tmp_num_row, tmp_num_col] = size(Res_Check_energy_comp_uav);
     if sum(Res_Check_energy_comp_uav(:)) == tmp_num_row * tmp_num_col
-        fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
+        fprintf('<%d Pass....%d %d\n',E_uav_OE_max, tmp_num_row, tmp_num_col);
     else
-        fprintf('sum:%d, size:%d %d\n',sum(Res_Check_energy_comp_uav(:)), tmp_num_row, tmp_num_col);
+        fprintf(' %d', ck_E_uav_comp);
+        fprintf('\n');  
+        fprintf('<%d No Pass! sum:%d, size:%d %d\n',E_uav_OE_max, sum(Res_Check_energy_comp_uav(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     %% [4] Rate: Frequency Needed in UAV
@@ -160,6 +94,7 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
         fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
     else
         fprintf('sum:%d, size:%d %d\n',sum(Res_Check_freq(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     %% [5] Mobility: Maximum Velocity of UAV
@@ -175,6 +110,7 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
         fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
     else
         fprintf('sum:%d, size:%d %d\n',sum(Res_Check_velocity(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     %% [6] Mobility: Minimum Distance between 2 UAVs (safety)
@@ -203,6 +139,7 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
         fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
     else
         fprintf('sum:%d, size:%d %d\n',sum(Res_Check_Dis2UAVs(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     %% [7] Bits: Task should be completed
@@ -211,12 +148,17 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
     ck_local_bits = Given_L_un * diag(Task_Bit_Vec);
     ck_Computed_bits = sum(ck_offload_bits + ck_local_bits, 1);
     Res_Check_TaskCompleted = (ck_Computed_bits >= Task_Bit_Vec);
-    [tmp_num_row, tmp_num_col] = size(Res_Check_TaskCompleted);
-    if sum(Res_Check_TaskCompleted(:)) == tmp_num_row * tmp_num_col
+    % [tmp_num_row, tmp_num_col] = size(Res_Check_TaskCompleted);
+    if sum(Res_Check_TaskCompleted(:)) == length(Res_Check_TaskCompleted)
         fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
     else
-        fprintf('sum:%d, size:%d %d\n',sum(Res_Check_TaskCompleted(:)), tmp_num_row, tmp_num_col);
-        ck_Computed_bits
+        fprintf(' %d', ck_Computed_bits);
+        fprintf('\n');  
+        error = sum(abs(max(Task_Bit_Vec - ck_Computed_bits, 0)));
+        fprintf('No Pass! sum:%d, size:%d error:%d\n',sum(Res_Check_TaskCompleted(:)), length(Res_Check_TaskCompleted), error);
+        if error >= Num_UAV*1
+            Final_Check = Final_Check + 1;
+        end
     end
 
     %% [8] Association: Constraint of TAU
@@ -227,6 +169,7 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
         fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
     else
         fprintf('sum:%d, size:%d %d\n',sum(Res_Check_TAU1(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
     Res_Check_TAU2 = (Given_TAU_umn * (Matrix_Replicate_10_40') <= 1);
@@ -235,6 +178,7 @@ function CheckProc_func(Num_User, Num_UAV, ck_Rate, Given_TAU_umn,Given_L_un,Giv
         fprintf('Pass....%d %d\n',tmp_num_row, tmp_num_col);
     else
         fprintf('sum:%d, size:%d %d\n',sum(Res_Check_TAU2(:)), tmp_num_row, tmp_num_col);
+        Final_Check = Final_Check + 1;
     end
 
 %     %% [9] Local: Computing Constraint of L
