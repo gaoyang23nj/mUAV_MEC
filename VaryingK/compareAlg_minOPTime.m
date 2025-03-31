@@ -1,4 +1,4 @@
-%% OPT Alg.
+%% Maxmin_OffloadingBits Alg.
 
 %% Main Solve Programm...
 %     MAX_Iteration = 100;
@@ -159,18 +159,33 @@ for iteration = 1:MAX_Iteration
 %             maximize(min(Computed_bits))
 
             % Optimization Target -- minmize the maximum weighted delay
-%            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+            % --convex bits
+            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
 %             target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
 %             Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
 %             Target = max(Delay_Utility);
 %             minimize( Target );
-            
-            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
-            target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
-            Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
-            Target = max(Delay_Utility);
-            minimize( Target );
-            
+
+            % --concave bits
+            % target_offload_bits = Rate_comp_2taylor_true .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+            % target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
+            % Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
+            % Target = max(Delay_Utility);
+            % minimize( Target );
+            % 
+            % offloadbits = Rate*Time; comm_time = offloadbits/Rate; comp_time = offloadbits/Freq;
+            % Comp_Time = Given_L_un*L_k/Freq; 
+            % Var_L_un * diag(Task_Bit_Vec/1e6 * c_u) <= CPUFreq_User/1e6 * Delta
+            %
+            time1 = Given_TAU_umn * Delta;
+            time2 = target_offload_bits * c_u / CPUFreq_UAV;
+            time3 = Given_L_un * diag(Task_Bit_Vec/1e6 * c_u) / CPUFreq_User;
+            % Target = sum(time1, [1 2]) + sum(time2, [1 2]) + sum(time3, [1 2]);
+            T1 = sum(time1, 2);
+            T2 = sum(time2, 2);
+            T3 = sum(time3, 2);
+            minimize(sum(T1+T2+T3, 1));
+
             subject to
                 Var_Q_mn_x <= MAX_X
                 Var_Q_mn_y <= MAX_Y
@@ -309,15 +324,30 @@ for iteration = 1:MAX_Iteration
             % Computed_bits >= Task_Bit_Vec
 %             maximize( min(Computed_bits) )
             
-        %     % Target
+        % %     % Target
+            % -- convex bits
             target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
-        %    target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
-        %     % unit is Mbps
+        % %    target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
+        % %     % unit is Mbps
             target_offload_bits = (target_comp_Rate .* Given_TAU_umn) * Delta * Matrix_Replicate_10_40' * Bandwidth/1e6;
-            targe_time_bits = (target_offload_bits./repmat(Task_Bit_Vec/1e6, [N, 1])) + Given_L_un;
-            Delay_Utility = sum(diag(1:1:N) * targe_time_bits, 1);
-            Target = max(Delay_Utility);
-            minimize( Target )
+            % -- concave bits
+        %     targe_time_bits = (target_offload_bits./repmat(Task_Bit_Vec/1e6, [N, 1])) + Given_L_un;
+        %     Delay_Utility = sum(diag(1:1:N) * targe_time_bits, 1);
+        %     Target = max(Delay_Utility);
+        %     minimize( Target )
+            % target_offload_bits = offload_bits;
+			% Target_TotalOffloadingBits = sum(offload_bits, 1);
+			% Target = min(Target_TotalOffloadingBits);
+			% maximize(Target);
+
+            time1 = Given_TAU_umn * Delta;
+            time2 = target_offload_bits * c_u / CPUFreq_UAV;
+            time3 = Given_L_un * diag(Task_Bit_Vec/1e6 * c_u) / CPUFreq_User;
+            % Target = sum(time1, [1 2]) + sum(time2, [1 2]) + sum(time3, [1 2]);
+            T1 = sum(time1, 2);
+            T2 = sum(time2, 2);
+            T3 = sum(time3, 2);
+            minimize(sum(T1+T2+T3, 1));
 
             % sub-area constraint
             subarea = max(pow_abs(Var_P_un - Given_P_un_r, 2));
@@ -420,11 +450,24 @@ for iteration = 1:MAX_Iteration
 
         % Optimization Target
         offload_bits = Rate .* Var_TAU_umn * Delta * (Matrix_Replicate_10_40')/1e6;
-        offload_ratio = offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1]);
-        Delay_Utility = sum(diag(1:1:N) * (offload_ratio + Var_L_un),1);
-        Target = max(Delay_Utility);
+%        offload_ratio = offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1]);
+%        Delay_Utility = sum(diag(1:1:N) * (offload_ratio + Var_L_un),1);
+%        Target = max(Delay_Utility);
+%        minimize( Target )
+%
+		% Target_TotalOffloadingBits = sum(offload_bits,1);
+		% Target = min(Target_TotalOffloadingBits);
+		% maximize(Target);
 
-        minimize( Target )
+        time1 = Var_TAU_umn * Delta;
+        time2 = offload_bits * c_u / CPUFreq_UAV;
+        time3 = Var_L_un * diag(Task_Bit_Vec/1e6 * c_u) / CPUFreq_User;
+        % Target = sum(time1, [1 2]) + sum(time2, [1 2]) + sum(time3, [1 2]);
+        T1 = sum(time1, 2);
+        T2 = sum(time2, 2);
+        T3 = sum(time3, 2);
+        minimize(sum(T1+T2+T3, 1));
+
         subject to
             0 <= Var_L_un <= 1
             0 <= Var_TAU_umn <= 1

@@ -2,7 +2,7 @@
 T = 100;
 N = 200;
 % delta = 0.5;
-delta = T/N;
+Delta = T/N;
 % altidue 100m
 H = 100;
 % max velocity, 30m/s

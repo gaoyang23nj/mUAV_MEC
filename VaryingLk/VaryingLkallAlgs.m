@@ -1,19 +1,19 @@
 % simulate
-clear;
+clear all;
 clc;
 
 diary('outputlog.txt');
 diary on;
 
-
-cvx_solver Mosek_4;
+% choose Mosek aom
+cvx_solver Mosek_2;
 
 time_begin = clock;
 fprintf('Now:');
-fprintf(' %d', clock);
+fprintf(' %d',clock);
 fprintf('\n');
 tic;
-Times = 6;
+Times = 3;
 
 % rng seed
 t = clock;
@@ -24,33 +24,54 @@ fprintf('rng seed:%d,%f\n',(t(6)+t(5)*60+t(4)*3600)*1000, rand(1));
 MAX_Iteration = 50;
 Num_UAV = 4;
 Num_User = 10;
+Num_init_Lk = 1;
+Num_end_Lk = 10;
+list_Lk_first = Num_init_Lk:Num_end_Lk;
 %10Mb ~ 100Mb
 % list_Lk = (1:10)*1e7;
-list_Lk_first = 1:10;
 list_Lk = list_Lk_first*1e7;
+
 
 %% record Result of varying K multiple times
 % OPT Alg
 all_Record_VaryingK_OPT =  ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_real_OPT = ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_Math_OPT = ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_Sim_OPT = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_OPT_real = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_OPT_Math = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_OPT_Sim = ones(Times, length(list_Lk)) * (-1);
 % Local Alg
-all_Record_VaryingK_Sim_Local = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_Local_Sim = ones(Times, length(list_Lk)) * (-1);
 % Static Alg
 all_Record_VaryingK_Static =  ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_real_Static = ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_Math_Static = ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_Sim_Static = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_Static_real = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_Static_Math = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_Static_Sim = ones(Times, length(list_Lk)) * (-1);
 % Peak Power Alg
 all_Record_VaryingK_PeakPower =  ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_real_PeakPower = ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_Math_PeakPower = ones(Times, length(list_Lk)) * (-1);
-all_Record_VaryingK_Sim_PeakPower = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_PeakPower_real = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_PeakPower_Math = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_PeakPower_Sim = ones(Times, length(list_Lk)) * (-1);
 % Upper Bound Cal.
 all_Record_VaryingK_UpperBound = ones(Times, length(list_Lk)) * (-1);
 % Lower Bound Cal.
 all_Record_VaryingK_LowerBound = ones(Times, length(list_Lk)) * (-1);
+% Maxmin OffBits Alg
+all_Record_VaryingK_MaxminOffBits =  ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MaxminOffBits_real = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MaxminOffBits_Math = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MaxminOffBits_Sim = ones(Times, length(list_Lk)) * (-1);
+% Min sum OPTime
+all_Record_VaryingK_MinOPTime =  ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MinOPTime_real = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MinOPTime_Math = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MinOPTime_Sim = ones(Times, length(list_Lk)) * (-1);
+
+% Total energy comsumed
+all_Record_VaryingK_OPT_Energy = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_Local_Energy = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_Static_Energy = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_PeakPower_Energy = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MaxminOffBits_Energy = ones(Times, length(list_Lk)) * (-1);
+all_Record_VaryingK_MinOPTime_Energy = ones(Times, length(list_Lk)) * (-1);
 
 label_break = false;
 for Index_Lk = 1:length(list_Lk)
@@ -59,9 +80,9 @@ for Index_Lk = 1:length(list_Lk)
     end
     fprintf('Lk = %d Mb\n', list_Lk(Index_Lk)/1e6);
     Task_Bit_Vec = ones(1,Num_User)*list_Lk(Index_Lk);
+	INIT_PARAMS_Lk;
     for current_times = 1:Times
-        INIT_PARAMS_Lk;
-        
+
         Loc_User_x = rand(1,Num_User)*MAX_X;
         fprintf('Loc_User_x:');
         fprintf(' %d', Loc_User_x);
@@ -73,10 +94,11 @@ for Index_Lk = 1:length(list_Lk)
         %% Local Alg
         disp('Local Alg');
         % how many bits in one slot
-        bits_oneslot = CPUFreq_User * delta / c_u;
+        bits_oneslot = CPUFreq_User * Delta / c_u;
         % Task_Bit_Vec / bits_oneslot
         remain_bits = Task_Bit_Vec;
         tmp_res_local = zeros(1, Num_User);
+        tmp_energy = zeros(1, Num_User);
         for tmp_localcomp_user = 1:Num_User
             for i=1:N
                 cal_bits = min(remain_bits(1, tmp_localcomp_user), bits_oneslot );
@@ -86,13 +108,16 @@ for Index_Lk = 1:length(list_Lk)
         end
         tmp_res_local;
         tmp_res_local./Task_Bit_Vec;
-        ResLocal = max(tmp_res_local);
-        fprintf('LocalAlg ResLocal: %f %f(10^7)\n', ResLocal, ResLocal/1e7);
-        all_Record_VaryingK_Sim_Local(current_times, Index_Lk) = ResLocal;
+        ResOPT = max(tmp_res_local);
+        all_Record_VaryingK_Local_Sim(current_times, Index_Lk) = ResOPT;
+        Res_Total_Energy = sum(tmp_energy);
+        all_Record_VaryingK_Local_Energy(current_times, Index_Lk) = Res_Total_Energy;
+        fprintf('LocalAlg ResOPT: %f %f(10^7); Total_Energy: %f\n', ResOPT, ResOPT/1e7, Res_Total_Energy);
+
 
         %% Lower Upper Bound of AoT
         % Upper Bound is Local Computing, (maybe with higher or worst Comm.)
-        capacity = (CPUFreq_User * delta)/c_u;
+        capacity = (CPUFreq_User * Delta)/c_u;
         fprintf('UP capac: %f %f(Mb)\n', capacity, capacity/1e6);
         remain_bits = Task_Bit_Vec;
         UB_AoT_k = zeros(1, Num_User);
@@ -111,10 +136,10 @@ for Index_Lk = 1:length(list_Lk)
 
         % Lower Bound with min(the best Comm., best Comp.)
         up_transmit_rate = Bandwidth * log2((Pu_max * rho) / (H*H)/Sigma2);
-        up_process_rate = CPUFreq_UAV * delta / c_u;
+        up_process_rate = CPUFreq_UAV * Delta / c_u;
         UAV_capa = max(0, min(up_transmit_rate, up_process_rate))*Num_UAV/Num_User;
         % remote capacity + local capacity
-        capacity = UAV_capa + (CPUFreq_User * delta)/c_u;
+        capacity = UAV_capa + (CPUFreq_User * Delta)/c_u;
         fprintf('LW capac: %f %f(Mb)\n', capacity, capacity/1e6);
         remain_bits = Task_Bit_Vec;
         LB_AoT_k = zeros(1, Num_User);
@@ -137,7 +162,7 @@ for Index_Lk = 1:length(list_Lk)
         disp('OPT proposed Alg');
         % Given Value
         Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
-        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*delta /(Task_Bit_Vec(1)*c_u));
+        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*Delta /(Task_Bit_Vec(1)*c_u));
         Given_P_un = ones(N, Num_User).* Pu_max;
         Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
         Given_Q_mn_x = zeros(N,Num_UAV);
@@ -158,25 +183,25 @@ for Index_Lk = 1:length(list_Lk)
         % conduct alg
         compareAlg_OPT;
         if A_breakiteration ~= MAX_Iteration
-            fprintf('Break! compareAlg_OPT [K:%d]-[%d]', Index_Lk, current_times);
+            fprintf('Break! compareAlg_OPT [Lk:%d]-[%d]', Index_Lk, current_times);
             label_break = true;
             break;
         end
         % Record Res
         all_Record_VaryingK_OPT(current_times, Index_Lk) =  Record_Res_iteration(end);
-        all_Record_VaryingK_real_OPT(current_times, Index_Lk) = Record_Res_real_iteration(end);
+        all_Record_VaryingK_OPT_real(current_times, Index_Lk) = Record_Res_real_iteration(end);
         sprintf('OPTALG CAL_RES: %f %f', Record_Res_iteration(end), Record_Res_real_iteration(end));
         % Math Calculation
         ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
         % currate Time with higher N
         fprintf('Static Math Calculation:%f', TargetStatic);
-        all_Record_VaryingK_Math_OPT(current_times, Index_Lk) = TargetStatic;
+        all_Record_VaryingK_OPT_Math(current_times, Index_Lk) = TargetStatic;
         % Simulate 
-        assert(N == T/delta);
+        assert(N == T/Delta);
         Task_Bit_Vec;
-        offload_bits = ck_Rate * Bandwidth .* Given_TAU_umn * delta * (Matrix_Replicate_10_40');
-        % diag(1:1:N) * delta * offload_bits
+        offload_bits = ck_Rate * Bandwidth .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40');
+        % diag(1:1:N) * Delta * offload_bits
         local_bits = Given_L_un * diag(Task_Bit_Vec);
         % [local_Freq]
         total_bits = offload_bits + local_bits;
@@ -184,21 +209,22 @@ for Index_Lk = 1:length(list_Lk)
         tmp_res_opt = zeros(1, Num_User);
         for i = 1:N
             tmp_res_opt = tmp_res_opt + total_bits(i,:) * i;
-%             tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * delta;
+%             tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * Delta;
         end
         tmp_res_opt
         tmp_res_opt./Task_Bit_Vec;
         ResOPT = max(tmp_res_opt);
-        fprintf('OptAlg ResOPT: %f %f(10^7)\n', ResOPT, ResOPT/1e7);
-        all_Record_VaryingK_Sim_OPT(current_times, Index_Lk) = ResOPT;
-        
-        
+        all_Record_VaryingK_OPT_Sim(current_times, Index_Lk) = ResOPT;
+        Res_Total_Energy = GetTotalEnergy(Num_User, Num_UAV, ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Given_P_un, Given_Q_mn_x, Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+        all_Record_VaryingK_OPT_Energy(current_times, Index_Lk) = Res_Total_Energy;
+        fprintf('OptAlg ResOPT: %f %f(10^7); Total_Energy: %f\n', ResOPT, ResOPT/1e7, Res_Total_Energy);
+
 
         %% Static UAV Alg
         disp('Static UAV Alg');
         % Given Value
         Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
-        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*delta /(Task_Bit_Vec(1)*c_u));
+        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*Delta /(Task_Bit_Vec(1)*c_u));
         Given_P_un = ones(N, Num_User).* Pu_max;
         Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
         Given_Q_mn_x = zeros(N,Num_UAV);
@@ -221,24 +247,24 @@ for Index_Lk = 1:length(list_Lk)
         % conduct alg
         compareAlg_staticUAV;
         if A_breakiteration ~= MAX_Iteration
-            fprintf('Break! compareAlg_staticUAV [K:%d]-[%d]', Index_Lk, current_times);
+            fprintf('Break! compareAlg_staticUAV [Lk:%d]-[%d]', Index_Lk, current_times);
             label_break = true;
             break;
         end
         all_Record_VaryingK_Static(current_times, Index_Lk) =  Record_Res_iteration(end);
-        all_Record_VaryingK_real_Static(current_times, Index_Lk) = Record_Res_real_iteration(end);
+        all_Record_VaryingK_Static_real(current_times, Index_Lk) = Record_Res_real_iteration(end);
         sprintf('StaticUAVAlg CAL_RES: %f %f', Record_Res_iteration(end), Record_Res_real_iteration(end));
         % Math Calculation
         ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
         % currate Time with higher N
         fprintf('StaticUAVAlg Math Calculation:%f', TargetStatic);
-        all_Record_VaryingK_Math_Static(current_times, Index_Lk) = TargetStatic;
+        all_Record_VaryingK_Static_Math(current_times, Index_Lk) = TargetStatic;
         % Simulate 
-        assert(N == T/delta)
+        assert(N == T/Delta)
         Task_Bit_Vec
-        offload_bitsStatic = ck_Rate * Bandwidth .* Given_TAU_umn * delta * (Matrix_Replicate_10_40');
-        % diag(1:1:N) * delta * offload_bits
+        offload_bitsStatic = ck_Rate * Bandwidth .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40');
+        % diag(1:1:N) * Delta * offload_bits
         local_bitsStatic = Given_L_un * diag(Task_Bit_Vec);
         % [local_Freq]
         total_bitsStatic = offload_bitsStatic + local_bitsStatic;
@@ -246,20 +272,22 @@ for Index_Lk = 1:length(list_Lk)
         tmp_res_opt = zeros(1, Num_User);
         for i = 1:N
             tmp_res_opt = tmp_res_opt + total_bitsStatic(i,:) * i;
-        %     tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * delta;
+        %     tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * Delta;
         end
         tmp_res_opt
         tmp_res_opt./Task_Bit_Vec;
         ResOPT = max(tmp_res_opt);
-        fprintf('StaticUAVAlg ResOPT: %f %f(10^7)\n', ResOPT, ResOPT/1e7);
-        all_Record_VaryingK_Sim_Static(current_times, Index_Lk) = ResOPT;
-        
+        all_Record_VaryingK_Static_Sim(current_times, Index_Lk) = ResOPT;
+        Res_Total_Energy = GetTotalEnergy(Num_User, Num_UAV, ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Given_P_un, Given_Q_mn_x, Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+        all_Record_VaryingK_Static_Energy(current_times, Index_Lk) = Res_Total_Energy;
+        fprintf('StaticUAV Alg Res: %f %f(10^7); Total_Energy: %f\n', ResOPT, ResOPT/1e7, Res_Total_Energy);
+
 
         %% Peak Power Alg
         disp('Peak Power Alg');
         % Given Value
         Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
-        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*delta /(Task_Bit_Vec(1)*c_u));
+        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*Delta /(Task_Bit_Vec(1)*c_u));
         Given_P_un = ones(N, Num_User).* Pu_max;
         Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
         Given_Q_mn_x = zeros(N,Num_UAV);
@@ -280,24 +308,24 @@ for Index_Lk = 1:length(list_Lk)
         % conduct alg
         compareAlg_peakTranPower;
         if A_breakiteration ~= MAX_Iteration
-            fprintf('Break! compareAlg_peakTranPower [K:%d]-[%d]', Index_Lk, current_times);
+            fprintf('Break! compareAlg_peakTranPower [Lk:%d]-[%d]', Index_Lk, current_times);
             label_break = true;
             break;
         end
         all_Record_VaryingK_PeakPower(current_times, Index_Lk) =  Record_Res_iteration(end);
-        all_Record_VaryingK_real_PeakPower(current_times, Index_Lk) = Record_Res_real_iteration(end);
+        all_Record_VaryingK_PeakPower_real(current_times, Index_Lk) = Record_Res_real_iteration(end);
         sprintf('PeakPowerAlg CAL_RES: %f %f', Record_Res_iteration(end), Record_Res_real_iteration(end));
         % Math Calculation
         ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
         % currate Time with higher N
         fprintf('PeakPowerAlg Math Calculation:%f', TargetStatic);
-        all_Record_VaryingK_Math_PeakPower(current_times, Index_Lk) = TargetStatic;
+        all_Record_VaryingK_PeakPower_Math(current_times, Index_Lk) = TargetStatic;
         % Simulate 
-        assert(N == T/delta)
+        assert(N == T/Delta)
         Task_Bit_Vec
-        offload_bitsStatic = ck_Rate * Bandwidth .* Given_TAU_umn * delta * (Matrix_Replicate_10_40');
-        % diag(1:1:N) * delta * offload_bits
+        offload_bitsStatic = ck_Rate * Bandwidth .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40');
+        % diag(1:1:N) * Delta * offload_bits
         local_bitsStatic = Given_L_un * diag(Task_Bit_Vec);
         % [local_Freq]
         total_bitsStatic = offload_bitsStatic + local_bitsStatic;
@@ -305,14 +333,141 @@ for Index_Lk = 1:length(list_Lk)
         tmp_res_opt = zeros(1, Num_User);
         for i = 1:N
             tmp_res_opt = tmp_res_opt + total_bitsStatic(i,:) * i;
-        %     tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * delta;
+        %     tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * Delta;
         end
         tmp_res_opt
         tmp_res_opt./Task_Bit_Vec;
         ResOPT = max(tmp_res_opt);
-        fprintf('PeakPowerAlg ResOPT: %f %f(10^7)\n', ResOPT, ResOPT/1e7);
-        all_Record_VaryingK_Sim_PeakPower(current_times, Index_Lk) = ResOPT;
+        all_Record_VaryingK_PeakPower_Sim(current_times, Index_Lk) = ResOPT;
+        Res_Total_Energy = GetTotalEnergy(Num_User, Num_UAV, ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Given_P_un, Given_Q_mn_x, Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+        all_Record_VaryingK_PeakPower_Energy(current_times, Index_Lk) = Res_Total_Energy;
+        fprintf('PeakPower Alg. Res: %f %f(10^7); Total_Energy: %f\n', ResOPT, ResOPT/1e7, Res_Total_Energy);
 
+        
+        %% Maxmin OffloadingBits Alg
+        disp('Maxmin OffloadingBits Alg');
+        % Given Value
+        Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
+        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*Delta /(Task_Bit_Vec(1)*c_u));
+        Given_P_un = ones(N, Num_User).* Pu_max;
+        Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
+        Given_Q_mn_x = zeros(N,Num_UAV);
+        Given_Q_mn_y = zeros(N,Num_UAV);
+        Given_Qinit_mn_x = zeros(1,Num_UAV);
+        Given_Qinit_mn_y = zeros(1,Num_UAV);
+        init_center_loc = [MAX_X*0.25, MAX_Y*0.75; MAX_X*0.25, MAX_Y*0.25; MAX_X*0.75, MAX_Y*0.75; MAX_X*0.75, MAX_Y*0.25];
+        init_r = 250;
+        for m=1:Num_UAV
+            Given_Qinit_mn_x(1, m) = init_center_loc(m,1) + cos(0)*init_r;
+            Given_Qinit_mn_y(1, m) = init_center_loc(m,2) + sin(0)*init_r;
+            for i=1:N
+                tmp_theta = 2 * pi * (i/(N+1));
+                Given_Q_mn_x(i, m) = init_center_loc(m,1) + cos(tmp_theta)*init_r;
+                Given_Q_mn_y(i, m) = init_center_loc(m,2) + sin(tmp_theta)*init_r;
+            end
+        end
+        % conduct alg
+        compareAlg_maxminOffBits;
+        if A_breakiteration ~= MAX_Iteration
+            fprintf('Break! compareAlg_maxminOffBits [Lk:%d]-[%d]', Index_Lk, current_times);
+            label_break = true;
+            break;
+        end
+        % Record Res
+        all_Record_VaryingK_MaxminOffBits(current_times, Index_Lk) =  Record_Res_iteration(end);
+        all_Record_VaryingK_MaxminOffBits_real(current_times, Index_Lk) = Record_Res_real_iteration(end);
+        sprintf('maxminOffBits ALG CAL_RES: %f %f', Record_Res_iteration(end), Record_Res_real_iteration(end));
+        % Math Calculation
+        ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
+        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
+        % currate Time with higher N
+        fprintf('Static Math Calculation:%f', TargetStatic);
+        all_Record_VaryingK_MaxminOffBits_Math(current_times, Index_Lk) = TargetStatic;
+        % Simulate 
+        assert(N == T/Delta);
+        Task_Bit_Vec;
+        offload_bits = ck_Rate * Bandwidth .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40');
+        % diag(1:1:N) * Delta * offload_bits
+        local_bits = Given_L_un * diag(Task_Bit_Vec);
+        % [local_Freq]
+        total_bits = offload_bits + local_bits;
+        sum(total_bits) >= Task_Bit_Vec;
+        tmp_res_opt = zeros(1, Num_User);
+        for i = 1:N
+            tmp_res_opt = tmp_res_opt + total_bits(i,:) * i;
+%             tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * Delta;
+        end
+        tmp_res_opt
+        tmp_res_opt./Task_Bit_Vec;
+        ResOPT = max(tmp_res_opt);
+		all_Record_VaryingK_MaxminOffBits_Sim(current_times, Index_Lk) = ResOPT;
+        Res_Total_Energy = GetTotalEnergy(Num_User, Num_UAV, ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Given_P_un, Given_Q_mn_x, Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+        all_Record_VaryingK_MaxminOffBits_Energy(current_times, Index_Lk) = Res_Total_Energy;
+        fprintf('maxminOffBits Res: %f %f(10^7); Total_Energy: %f\n', ResOPT, ResOPT/1e7, Res_Total_Energy);
+
+
+		%% Min Sum of Op Time Alg
+        disp('Min OP Time Alg');
+        % Given Value
+        Given_TAU_umn = ones(N, Num_User * Num_UAV) / Num_User;
+        Given_L_un = ones(N, Num_User) * min(1.5 / N, CPUFreq_User*Delta /(Task_Bit_Vec(1)*c_u));
+        Given_P_un = ones(N, Num_User).* Pu_max;
+        Given_F_umn = ones(N, Num_User * Num_UAV) * CPUFreq_UAV / Num_User;
+        Given_Q_mn_x = zeros(N,Num_UAV);
+        Given_Q_mn_y = zeros(N,Num_UAV);
+        Given_Qinit_mn_x = zeros(1,Num_UAV);
+        Given_Qinit_mn_y = zeros(1,Num_UAV);
+        init_center_loc = [MAX_X*0.25, MAX_Y*0.75; MAX_X*0.25, MAX_Y*0.25; MAX_X*0.75, MAX_Y*0.75; MAX_X*0.75, MAX_Y*0.25];
+        init_r = 250;
+        for m=1:Num_UAV
+            Given_Qinit_mn_x(1, m) = init_center_loc(m,1) + cos(0)*init_r;
+            Given_Qinit_mn_y(1, m) = init_center_loc(m,2) + sin(0)*init_r;
+            for i=1:N
+                tmp_theta = 2 * pi * (i/(N+1));
+                Given_Q_mn_x(i, m) = init_center_loc(m,1) + cos(tmp_theta)*init_r;
+                Given_Q_mn_y(i, m) = init_center_loc(m,2) + sin(tmp_theta)*init_r;
+            end
+        end
+        % conduct alg
+        compareAlg_minOPTime;
+        if A_breakiteration ~= MAX_Iteration
+            fprintf('Break! compareAlg_minOPTime [Lk:%d]-[%d]', Index_Lk, current_times);
+            label_break = true;
+            break;
+        end
+        % Record Res
+        % keep the optimization result
+        all_Record_VaryingK_MinOPTime(current_times, Index_Lk) =  Record_Res_iteration(end);
+        all_Record_VaryingK_MinOPTime_real(current_times, Index_Lk) = Record_Res_real_iteration(end);
+        sprintf('minOPTime ALG CAL_RES: %f %f', Record_Res_iteration(end), Record_Res_real_iteration(end));
+        % Math Calculation
+        ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
+        [TargetStatic,Delay_UtilityStatic,real_Delay_UtilityStatic,prop_offloadStatic] = GetTargetValue(ck_Rate * Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
+        % currate Time with higher N
+        fprintf('Static Math Calculation:%f', TargetStatic);
+        all_Record_VaryingK_MinOPTime_Math(current_times, Index_Lk) = TargetStatic;
+        % Simulate 
+        assert(N == T/Delta);
+        Task_Bit_Vec;
+        offload_bits = ck_Rate * Bandwidth .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40');
+        % diag(1:1:N) * Delta * offload_bits
+        local_bits = Given_L_un * diag(Task_Bit_Vec);
+        % [local_Freq]
+        total_bits = offload_bits + local_bits;
+        sum(total_bits) >= Task_Bit_Vec;
+        tmp_res_opt = zeros(1, Num_User);
+        for i = 1:N
+            tmp_res_opt = tmp_res_opt + total_bits(i,:) * i;
+%             tmp_res_opt = tmp_res_opt + total_bits(i,:) * i * Delta;
+        end
+        tmp_res_opt
+        tmp_res_opt./Task_Bit_Vec;
+        ResOPT = max(tmp_res_opt);
+        all_Record_VaryingK_MinOPTime_Sim(current_times, Index_Lk) = ResOPT;
+        Res_Total_Energy = GetTotalEnergy(Num_User, Num_UAV, ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Given_P_un, Given_Q_mn_x, Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
+        all_Record_VaryingK_MinOPTime_Energy(current_times, Index_Lk) = Res_Total_Energy;
+        fprintf('MinSumOPTime Res: %f %f(10^7); Total_Energy: %f\n', ResOPT, ResOPT/1e7, Res_Total_Energy);
+		
     end
 end
 
@@ -330,29 +485,37 @@ toc;
 running_time = etime(time_end, time_begin);
 fprintf('Execution Time: %f [%dMb-%dMb][%d]\n', running_time, list_Lk_first(1)*10, list_Lk_first(end)*10, Times);
 
-y1 = mean(all_Record_VaryingK_Sim_OPT,1)*delta;
-y2 = mean(all_Record_VaryingK_Sim_Local,1)*delta;
-y3 = mean(all_Record_VaryingK_Sim_Static,1)*delta;
-y4 = mean(all_Record_VaryingK_Sim_PeakPower,1)*delta;
-y5 = mean(all_Record_VaryingK_UpperBound,1)*delta;
-y6 = mean(all_Record_VaryingK_LowerBound,1)*delta;
+y1 = mean(all_Record_VaryingK_OPT_Sim,1)*Delta;
+y2 = mean(all_Record_VaryingK_Local_Sim,1)*Delta;
+y3 = mean(all_Record_VaryingK_PeakPower_Sim,1)*Delta;
+y4 = mean(all_Record_VaryingK_Static_Sim,1)*Delta;
+y5 = mean(all_Record_VaryingK_UpperBound,1)*Delta;
+y6 = mean(all_Record_VaryingK_LowerBound,1)*Delta;
+y7 = mean(all_Record_VaryingK_MaxminOffBits_Sim,1)*Delta;
+y8 = mean(all_Record_VaryingK_MinOPTime_Sim,1)*Delta;
 %Figure
+
 f5 = figure(5);
-hold on;
 % plot(Num_init_K:Num_end_K, y1,'Marker','+','Color','b');
 plot(list_Lk, y1,'Marker','o','Color','b');
+hold on;
 plot(list_Lk, y2,'Marker','+','Color','k');
 plot(list_Lk, y3,'Marker','*','Color','r');
 plot(list_Lk, y4,'Marker','d','Color','g');
 plot(list_Lk, y5, '--', 'Marker','^','Color','g');
-plot(list_Lk, y6, '--', 'Marker','v','Color','y');
-xlabel('K');
-ylabel('Min-max AoT');
-legend('AoT OPT Alg.','Local Comp.', 'Static UAV', 'Peak Power', 'Upper Bound', 'Lower Bound');
+plot(list_Lk, y6, '--', 'Marker','v','Color','k');
+plot(list_Lk, y7, '--', 'Marker','d','Color','y');
+plot(list_Lk, y8, '-.', 'Marker','*','Color','r');
+xlabel('Lk');
+% ylabel('Min-max AoT');
+ylabel('Max AoT of GUs');
+legend('AoT OPT Alg.','Local Comp.', 'Peak Power', 'Static UAV', 'Upper Bound', 'Lower Bound', 'Maxmin OffBits Alg.', 'Min OP Time Alg.');
 tmp_filename_jpg = strcat(filename, '.jpg');
 saveas(f5, tmp_filename_jpg);
-tmp_filename_eps = strcat(filename, '.eps');
-saveas(f5, tmp_filename_eps);
-
+% tmp_filename_eps = strcat(filename, '.eps');
+% saveas(f5, tmp_filename_eps);
 
 diary off;
+fprintf('Now:');
+fprintf(' %d',clock);
+fprintf('\n');

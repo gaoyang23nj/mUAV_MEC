@@ -1,4 +1,4 @@
-%% OPT Alg.
+%% Maxmin_OffloadingBits Alg.
 
 %% Main Solve Programm...
 %     MAX_Iteration = 100;
@@ -159,18 +159,21 @@ for iteration = 1:MAX_Iteration
 %             maximize(min(Computed_bits))
 
             % Optimization Target -- minmize the maximum weighted delay
-%            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+%             target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
 %             target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
 %             Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
 %             Target = max(Delay_Utility);
 %             minimize( Target );
-            
-            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
-            target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
-            Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
-            Target = max(Delay_Utility);
-            minimize( Target );
-            
+
+            target_offload_bits = Rate_comp_2taylor_true .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+%            target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
+%            Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
+%            Target = max(Delay_Utility);
+%            minimize( Target );
+			Target_TotalOffloadingBits = sum(target_offload_bits, 1);
+			Target = min(Target_TotalOffloadingBits);
+            maximize( Target );
+
             subject to
                 Var_Q_mn_x <= MAX_X
                 Var_Q_mn_y <= MAX_Y
@@ -309,15 +312,19 @@ for iteration = 1:MAX_Iteration
             % Computed_bits >= Task_Bit_Vec
 %             maximize( min(Computed_bits) )
             
-        %     % Target
-            target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
-        %    target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
-        %     % unit is Mbps
-            target_offload_bits = (target_comp_Rate .* Given_TAU_umn) * Delta * Matrix_Replicate_10_40' * Bandwidth/1e6;
-            targe_time_bits = (target_offload_bits./repmat(Task_Bit_Vec/1e6, [N, 1])) + Given_L_un;
-            Delay_Utility = sum(diag(1:1:N) * targe_time_bits, 1);
-            Target = max(Delay_Utility);
-            minimize( Target )
+        % %     % Target
+        %     target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde;
+        % %    target_comp_Rate = (Rate_hat_Taylor * Matrix_Replicate_4_40) - Rate_tilde_Taylor;
+        % %     % unit is Mbps
+        %     target_offload_bits = (target_comp_Rate .* Given_TAU_umn) * Delta * Matrix_Replicate_10_40' * Bandwidth/1e6;
+        %     targe_time_bits = (target_offload_bits./repmat(Task_Bit_Vec/1e6, [N, 1])) + Given_L_un;
+        %     Delay_Utility = sum(diag(1:1:N) * targe_time_bits, 1);
+        %     Target = max(Delay_Utility);
+        %     minimize( Target )
+            target_offload_bits = offload_bits;
+			Target_TotalOffloadingBits = sum(offload_bits, 1);
+			Target = min(Target_TotalOffloadingBits);
+			maximize(Target);
 
             % sub-area constraint
             subarea = max(pow_abs(Var_P_un - Given_P_un_r, 2));
@@ -420,11 +427,14 @@ for iteration = 1:MAX_Iteration
 
         % Optimization Target
         offload_bits = Rate .* Var_TAU_umn * Delta * (Matrix_Replicate_10_40')/1e6;
-        offload_ratio = offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1]);
-        Delay_Utility = sum(diag(1:1:N) * (offload_ratio + Var_L_un),1);
-        Target = max(Delay_Utility);
+%        offload_ratio = offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1]);
+%        Delay_Utility = sum(diag(1:1:N) * (offload_ratio + Var_L_un),1);
+%        Target = max(Delay_Utility);
+%        minimize( Target )
+		Target_TotalOffloadingBits = sum(offload_bits,1);
+		Target = min(Target_TotalOffloadingBits);
+		maximize(Target);
 
-        minimize( Target )
         subject to
             0 <= Var_L_un <= 1
             0 <= Var_TAU_umn <= 1

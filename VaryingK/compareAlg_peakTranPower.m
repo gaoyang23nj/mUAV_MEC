@@ -35,7 +35,7 @@ for iteration = 1:MAX_Iteration
         % init Y_slack_r
         dist_nplus1_x_r = [Given_Q_mn_x_r; Given_Qinit_mn_x] - [Given_Qinit_mn_x; Given_Q_mn_x_r];
         dist_nplus1_y_r = [Given_Q_mn_y_r; Given_Qinit_mn_x] - [Given_Qinit_mn_x; Given_Q_mn_y_r];
-        Yslack_r_velocity = sqrt(power(dist_nplus1_x_r,2)+power(dist_nplus1_y_r,2))/delta;
+        Yslack_r_velocity = sqrt(power(dist_nplus1_x_r,2)+power(dist_nplus1_y_r,2))/Delta;
         Yslack_r_term1 = sqrt(1 + 0.25 * power(Yslack_r_velocity/prop_param_v0, 4));
         Yslack_r_term2 = 0.5 * power(Yslack_r_velocity / prop_param_v0, 2);
         Given_Y_Slack_r = sqrt(Yslack_r_term1 - Yslack_r_term2);
@@ -61,18 +61,18 @@ for iteration = 1:MAX_Iteration
             dist_nplus1_x = [Var_Q_mn_x; Given_Qinit_mn_x] - [Given_Qinit_mn_x; Var_Q_mn_x];
             dist_nplus1_y = [Var_Q_mn_y; Given_Qinit_mn_y] - [Given_Qinit_mn_y; Var_Q_mn_y];
             dist_power2 = pow_abs(dist_nplus1_x, 2) + pow_abs(dist_nplus1_y, 2);
-            prop_energy_term1 = (1 + dist_power2*3)/(delta * delta * prop_param_Utip * prop_param_Utip) * prop_param_P0;
+            prop_energy_term1 = (1 + dist_power2*3)/(Delta * Delta * prop_param_Utip * prop_param_Utip) * prop_param_P0;
             dist_power3 = pow_pos(dist_power2, 1.5);
-            prop_energy_term2 = dist_power3/(delta*delta*delta) * prop_param_d0 * prop_param_rho * prop_param_A * prop_param_s * 0.5;
+            prop_energy_term2 = dist_power3/(Delta*Delta*Delta) * prop_param_d0 * prop_param_rho * prop_param_A * prop_param_s * 0.5;
             prop_energy_term3 = Var_Y_Slack * prop_param_Pi;
-            E_uav_prop = sum(prop_energy_term1 + prop_energy_term2 + prop_energy_term3, 1) * delta;
+            E_uav_prop = sum(prop_energy_term1 + prop_energy_term2 + prop_energy_term3, 1) * Delta;
             % E_uav_prop <= E_uav_prop_max;
             % [1.2] Y_slack constraint
             Y_term1 = power(Given_Y_Slack_r, 2) + 2 * Given_Y_Slack_r .* (Var_Y_Slack - Given_Y_Slack_r);
             dist_nplus1_x_r = [Given_Q_mn_x_r; Given_Qinit_mn_x] - [Given_Qinit_mn_x; Given_Q_mn_x_r];
             dist_nplus1_y_r = [Given_Q_mn_y_r; Given_Qinit_mn_y] - [Given_Qinit_mn_y; Given_Q_mn_y_r];
             dist_power2_r = power(dist_nplus1_x_r, 2) + power(dist_nplus1_y_r, 2); 
-            Y_term2_1 = - dist_power2_r/(delta * delta * prop_param_v0 * prop_param_v0);
+            Y_term2_1 = - dist_power2_r/(Delta * Delta * prop_param_v0 * prop_param_v0);
             Y_term2_2 = ((dist_nplus1_x_r .* dist_nplus1_x) + (dist_nplus1_y_r .* dist_nplus1_y)) * 2 / power(prop_param_delta*prop_param_v0, 2);
             %Con_Yslack = Y_term1 + Y_term2_1 + Y_term2_2 - pow_p(Var_Y_Slack, -2);
             Con_Yslack = Y_term1 + Y_term2_1 + Y_term2_2;
@@ -102,9 +102,9 @@ for iteration = 1:MAX_Iteration
             % Rate Taylor without Bandwidth
         %     Rate_comp_2taylor = Rate_hat_Taylor * Matrix_Replicate_4_40 - Rate_tilde_Taylor;
             Rate_comp_2taylor_true = Rate_hat_Taylor * Matrix_Replicate_4_40 - Rate_tilde_Taylor;
-    %         e_comp_energy_ele = (((kappa_uav * c_u * delta * power(Given_F_umn, 2) * Bandwidth) .* Given_TAU_umn)  .* Rate_comp_2taylor) * Matrix_Replicate_4_40';
+    %         e_comp_energy_ele = (((kappa_uav * c_u * Delta * power(Given_F_umn, 2) * Bandwidth) .* Given_TAU_umn)  .* Rate_comp_2taylor) * Matrix_Replicate_4_40';
             % calculate the upper bound of Rate; if the upper bound of Rate can statisfy the user energy constraint, the real Rate also satisfies user energy constraint.
-            e_comp_energy_ele = kappa_uav * power(Bandwidth, 3) * power(c_u,3) * delta * Given_TAU_umn .* pow_pos(Rate_comp_2taylor_true, 3);
+            e_comp_energy_ele = kappa_uav * power(Bandwidth, 3) * power(c_u,3) * Delta * Given_TAU_umn .* pow_pos(Rate_comp_2taylor_true, 3);
             E_uav_comp = sum(e_comp_energy_ele, 1);
             % E_uav_comp <= E_uav_OE_max;
 
@@ -127,8 +127,8 @@ for iteration = 1:MAX_Iteration
 
             % [4] mobility: maximum velocity constraint
             Dist_indelta = dist_power2;
-            % Dist_indelta <= power(delta*v_max, 2)
-            Vel_indelta = dist_power2 / power(delta*v_max, 2);
+            % Dist_indelta <= power(Delta*v_max, 2)
+            Vel_indelta = dist_power2 / power(Delta*v_max, 2);
             % Vel_indelta <= 1;
 
             % [5] mobility: minimum distance between 2 UAVs constraint 
@@ -154,18 +154,18 @@ for iteration = 1:MAX_Iteration
             % St_2UAV >= (d_min * d_min)/1e5;
 
             % [6] task completed constraint 
-            stcomp_offload_bits = Rate_comp_2taylor_true .* Given_TAU_umn * delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+            stcomp_offload_bits = Rate_comp_2taylor_true .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
             Computed_bits = sum(stcomp_offload_bits + Given_L_un * diag(Task_Bit_Vec/1e6), 1);
 %             maximize(min(Computed_bits))
 
             % Optimization Target -- minmize the maximum weighted delay
-%             target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+%             target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
 %             target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
 %             Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
 %             Target = max(Delay_Utility);
 %             minimize( Target );
             
-            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
+            target_offload_bits = Rate_comp_2taylor .* Given_TAU_umn * Delta * (Matrix_Replicate_10_40') * Bandwidth /1e6;
             target_time_bits = (target_offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1])) + Given_L_un;
             Delay_Utility = sum(diag(1:1:N) * target_time_bits, 1);
             Target = max(Delay_Utility);
@@ -202,7 +202,7 @@ for iteration = 1:MAX_Iteration
             end
 
             ck_Rate = GetAccurateRate(Var_Q_mn_x, Var_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-            tmpCVXTraj_Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
+            tmpCVXTraj_Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
             [Final_Check, ck_prop_energy] = CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn, tmpCVXTraj_Given_L_un, Given_P_un,Var_Q_mn_x, Var_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
             % tmp_Res_Check_energy_prop_uav = (ck_prop_energy <= E_uav_prop_max);
             % fprintf('ck_prop_energy (<%d): ', E_uav_prop_max);
@@ -227,11 +227,11 @@ for iteration = 1:MAX_Iteration
             % infeasible
             fprintf('inner loop Traj Break! infeasible\n');
             % ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-            % [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+            % [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
             % CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
             % fprintf('ck_Rate_2taylor_true Analyzing... ...\n');
             % ck_Rate_2taylor_true = Get2TaylorRate(Given_Q_mn_x, Given_Q_mn_y, Given_Q_mn_y, Given_Q_mn_x_r, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-            % [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+            % [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
             % CheckProc_func(Num_User, Num_UAV,ck_Rate_2taylor_true*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
             break
         end
@@ -262,13 +262,13 @@ for iteration = 1:MAX_Iteration
         variable Var_TAU_umn(N, Num_UAV*Num_User) nonnegative
 
         %[1] local computing energy
-%         energy_user_loc_comp = Var_L_un * diag(power(Task_Bit_Vec * c_u, 3) * kappa_user /(delta*delta));
-        energy_user_loc_comp = pow_pos(Var_L_un,3) * diag(power(Task_Bit_Vec * c_u, 3) * kappa_user /(delta*delta));
-        energy_user_comm = Var_TAU_umn * (Matrix_Replicate_10_40') .* Given_P_un * delta;
+%         energy_user_loc_comp = Var_L_un * diag(power(Task_Bit_Vec * c_u, 3) * kappa_user /(Delta*Delta));
+        energy_user_loc_comp = pow_pos(Var_L_un,3) * diag(power(Task_Bit_Vec * c_u, 3) * kappa_user /(Delta*Delta));
+        energy_user_comm = Var_TAU_umn * (Matrix_Replicate_10_40') .* Given_P_un * Delta;
         E_user = sum(energy_user_loc_comp + energy_user_comm,1);
 
         %[2] offloading computing energy
-        energy_off_comp = power(Rate,3) * kappa_uav * power(c_u, 3) * delta .* Var_TAU_umn * (Matrix_Replicate_4_40');
+        energy_off_comp = power(Rate,3) * kappa_uav * power(c_u, 3) * Delta .* Var_TAU_umn * (Matrix_Replicate_4_40');
         E_uav_comp = sum(energy_off_comp, 1);
         %[3] association constraint
         %[3.1]
@@ -284,17 +284,17 @@ for iteration = 1:MAX_Iteration
         %[4.2]
         % ones(1,N) * Var_L_un <= 1
         %[4.3] cannot beyond the compuataion capacity
-        %Var_L_un * diag(Task_Bit_Vec * c_u) <= CPUFreq_User * delta
+        %Var_L_un * diag(Task_Bit_Vec * c_u) <= CPUFreq_User * Delta
 
         %[5] task finished constraint
-        offload_bits = Rate .* Var_TAU_umn * delta * (Matrix_Replicate_10_40')/1e6;
+        offload_bits = Rate .* Var_TAU_umn * Delta * (Matrix_Replicate_10_40')/1e6;
         local_bits = Var_L_un * diag(Task_Bit_Vec)/1e6;
         tmp = offload_bits + local_bits;
         Computed_bits = sum(offload_bits + local_bits, 1);
         %Computed_bits >= Task_Bit_Vec
 
         % Optimization Target
-        offload_bits = Rate .* Var_TAU_umn * delta * (Matrix_Replicate_10_40')/1e6;
+        offload_bits = Rate .* Var_TAU_umn * Delta * (Matrix_Replicate_10_40')/1e6;
         offload_ratio = offload_bits ./ repmat(Task_Bit_Vec/1e6,[N,1]);
         Delay_Utility = sum(diag(1:1:N) * (offload_ratio + Var_L_un),1);
         Target = max(Delay_Utility);
@@ -308,7 +308,7 @@ for iteration = 1:MAX_Iteration
             Var_TAU_umn * (Matrix_Replicate_4_40') <= 1
             Var_TAU_umn * (Matrix_Replicate_10_40') <= 1
             ones(1,N) * Var_L_un <= 1
-            Var_L_un * diag(Task_Bit_Vec/1e6 * c_u) <= CPUFreq_User/1e6 * delta
+            Var_L_un * diag(Task_Bit_Vec/1e6 * c_u) <= CPUFreq_User/1e6 * Delta
             Computed_bits >= Task_Bit_Vec/1e6
     cvx_end
     fprintf('OptRes_TauL [%d]:%s %f\n', iteration, cvx_status, cvx_optval);
@@ -350,10 +350,10 @@ for iteration = 1:MAX_Iteration
     % Complement Bits (modify Given_L_un)
     % Accurate Rate
     ck_Rate = GetAccurateRate(Given_Q_mn_x, Given_Q_mn_y, Loc_User_x, Loc_User_y, Given_P_un, H, Sigma2, rho, N, Num_User, Num_UAV);
-    Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
+    Given_L_un = ProcessL(ck_Rate, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, CPUFreq_User, c_u, N, Num_User, Num_UAV, Bandwidth);
     [Final_Check, ck_prop_energy] = CheckProc_func(Num_User, Num_UAV,ck_Rate*Bandwidth, Given_TAU_umn,Given_L_un,Given_P_un,Given_Q_mn_x,Given_Q_mn_y, Given_Qinit_mn_x, Given_Qinit_mn_y, Task_Bit_Vec);
     % Get Value
-    [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, delta, N, Num_User, Num_UAV);
+    [result,ck_Delay_Utility,ck_real_Delay_Utility,ck_prop_offload] = GetTargetValue(ck_Rate*Bandwidth, Given_TAU_umn, Given_L_un, Task_Bit_Vec, Delta, N, Num_User, Num_UAV);
     
     if Final_Check == 0
         fprintf('Pass! Record Value after CVX TAU and L \n');
