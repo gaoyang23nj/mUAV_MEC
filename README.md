@@ -17,5 +17,7 @@ This SolveP1bcdsca3subs.m can also adopt the other solvers, e.g., SDPT3 of CVX.
 
 [VaryingLkallAlgs.m](https://github.com/gaoyang23nj/mUAV_MEC/blob/main/VaryingLk/VaryingLkallAlgs.m) ealuates the performance of various schemes with varying L_k (i.e., the size of task-input data).
 
+## Case Study Experiment
 [CaseStudy](https://github.com/gaoyang23nj/mUAV_MEC/tree/main/CaseStudy) provides a case study about the optimization variables change with iteration.
+It can provides the update about optimizing trajectories, the update about the objective function.
 
